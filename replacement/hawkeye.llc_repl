@@ -18,30 +18,30 @@
 #include "../inc/champsim.h"
 #include <map>
 
-#define NUM_CORE 1
-#define LLC_SETS NUM_CORE*2048
-#define LLC_WAYS 16
+/*#define NUM_CORE 1*/
+/*#define LLC_SETS NUM_CPUS*2048*/
+/*#define LLC_WAYS 16*/
 
 //3-bit RRIP counters or all lines
 #define maxRRPV 7
-uint32_t rrpv[LLC_SETS][LLC_WAYS];
+uint32_t rrpv[LLC_SET][LLC_WAY];
 
 
 //Per-set timers; we only use 64 of these
 //Budget = 64 sets * 1 timer per set * 10 bits per timer = 80 bytes
 #define TIMER_SIZE 1024
-uint64_t perset_mytimer[LLC_SETS];
+uint64_t perset_mytimer[LLC_SET];
 
 // Signatures for sampled sets; we only use 64 of these
 // Budget = 64 sets * 16 ways * 12-bit signature per line = 1.5B
-uint64_t signatures[LLC_SETS][LLC_WAYS];
-bool prefetched[LLC_SETS][LLC_WAYS];
+uint64_t signatures[LLC_SET][LLC_WAY];
+bool prefetched[LLC_SET][LLC_WAY];
 
 // Hawkeye Predictors for demand and prefetch requests
 // Predictor with 2K entries and 5-bit counter per entry
 // Budget = 2048*5/8 bytes = 1.2KB
 #define MAX_SHCT 31
-#define SHCT_SIZE_BITS 11
+#define SHCT_SIZE_BITS 1+NUM_CPUS
 #define SHCT_SIZE (1<<SHCT_SIZE_BITS)
 #include "hawkeye_predictor.h"
 HAWKEYE_PC_PREDICTOR* demand_predictor;  //Predictor
@@ -49,17 +49,21 @@ HAWKEYE_PC_PREDICTOR* prefetch_predictor;  //Predictor
 
 #define OPTGEN_VECTOR_SIZE 128
 #include "optgen.h"
-OPTgen perset_optgen[LLC_SETS]; // per-set occupancy vectors; we only use 64 of these
+OPTgen perset_optgen[LLC_SET]; // per-set occupancy vectors; we only use 64 of these
 
 #include <math.h>
 #define bitmask(l) (((l) == 64) ? (unsigned long long)(-1LL) : ((1LL << (l))-1LL))
 #define bits(x, i, l) (((x) >> (i)) & bitmask(l))
 //Sample 64 sets per core
-#define SAMPLED_SET(set) (bits(set, 0 , 6) == bits(set, ((unsigned long long)log2(LLC_SETS) - 6), 6) )
+#if NUM_CPUS == 1
+#define SAMPLED_SET(set) (bits(set, 0 , 6) == bits(set, ((unsigned long long)log2(LLC_SET) - 6), 6) )
+#else
+#define SAMPLED_SET(set) (bits(set, 0 , 8) == bits(set, ((unsigned long long)log2(LLC_SET) - 8), 8) )
+#endif
 
 // Sampler to track 8x cache history for sampled sets
 // 2800 entris * 4 bytes per entry = 11.2KB
-#define SAMPLED_CACHE_SIZE 2800
+#define SAMPLED_CACHE_SIZE 2800*NUM_CPUS
 #define SAMPLER_WAYS 8
 #define SAMPLER_SETS SAMPLED_CACHE_SIZE/SAMPLER_WAYS
 vector<map<uint64_t, ADDR_INFO> > addr_history; // Sampler
@@ -67,14 +71,14 @@ vector<map<uint64_t, ADDR_INFO> > addr_history; // Sampler
 // initialize replacement state
 void CACHE::llc_initialize_replacement()
 {
-    for (int i=0; i<LLC_SETS; i++) {
-        for (int j=0; j<LLC_WAYS; j++) {
+    for (int i=0; i<LLC_SET; i++) {
+        for (int j=0; j<LLC_WAY; j++) {
             rrpv[i][j] = maxRRPV;
             signatures[i][j] = 0;
             prefetched[i][j] = false;
         }
         perset_mytimer[i] = 0;
-        perset_optgen[i].init(LLC_WAYS-2);
+        perset_optgen[i].init(LLC_WAY-2);
     }
 
     addr_history.resize(SAMPLER_SETS);
@@ -92,14 +96,14 @@ void CACHE::llc_initialize_replacement()
 uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t PC, uint64_t paddr, uint32_t type)
 {
     // look for the maxRRPV line
-    for (uint32_t i=0; i<LLC_WAYS; i++)
+    for (uint32_t i=0; i<LLC_WAY; i++)
         if (rrpv[set][i] == maxRRPV)
             return i;
 
     //If we cannot find a cache-averse line, we evict the oldest cache-friendly line
     uint32_t max_rrip = 0;
     int32_t lru_victim = -1;
-    for (uint32_t i=0; i<LLC_WAYS; i++)
+    for (uint32_t i=0; i<LLC_WAY; i++)
     {
         if (rrpv[set][i] >= max_rrip)
         {
@@ -241,7 +245,7 @@ void CACHE::llc_update_replacement_state (uint32_t cpu, uint32_t set, uint32_t w
             assert(addr_history[sampler_set].find(sampler_tag) != addr_history[sampler_set].end());
             //if(hit && prefetched[set][way])
             uint64_t last_quanta = addr_history[sampler_set][sampler_tag].last_quanta % OPTGEN_VECTOR_SIZE;
-            if (perset_mytimer[set] - addr_history[sampler_set][sampler_tag].last_quanta < 5*NUM_CORE) 
+            if (perset_mytimer[set] - addr_history[sampler_set][sampler_tag].last_quanta < 5*NUM_CPUS) 
             {
                 if(perset_optgen[set].should_cache(curr_quanta, last_quanta))
                 {
@@ -286,12 +290,12 @@ void CACHE::llc_update_replacement_state (uint32_t cpu, uint32_t set, uint32_t w
         if(!hit)
         {
             bool saturated = false;
-            for(uint32_t i=0; i<LLC_WAYS; i++)
+            for(uint32_t i=0; i<LLC_WAY; i++)
                 if (rrpv[set][i] == maxRRPV-1)
                     saturated = true;
 
             //Age all the cache-friendly  lines
-            for(uint32_t i=0; i<LLC_WAYS; i++)
+            for(uint32_t i=0; i<LLC_WAY; i++)
             {
                 if (!saturated && rrpv[set][i] < maxRRPV-1)
                     rrpv[set][i]++;
@@ -306,7 +310,7 @@ void CACHE::llc_replacement_final_stats()
 {
     unsigned int hits = 0;
     unsigned int accesses = 0;
-    for(unsigned int i=0; i<LLC_SETS; i++)
+    for(unsigned int i=0; i<LLC_SET; i++)
     {
         accesses += perset_optgen[i].access;
         hits += perset_optgen[i].get_num_opt_hits();
