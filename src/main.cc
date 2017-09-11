@@ -696,7 +696,7 @@ int main(int argc, char** argv)
         major_fault[i] = 0;
     }
 
-    uncore.LLC.llc_initialize_replacement();
+    uncore.LLC.llc_initialize_replacement(ooo_cpu[0].trace_string);
 
     // simulation entry point
     start_time = time(NULL);

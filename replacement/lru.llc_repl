@@ -1,9 +1,49 @@
 #include "cache.h"
+#include <inttypes.h>
+#include <vector>
+#include <bits/stdc++.h>
+#define MAX_REUSE_DIST 8000
+
+struct access {
+    uint64_t full_addr;
+    uint32_t type;
+};
+
+FILE *outfile;
+FILE *reuse_csv_krn;
+FILE *reuse_csv_usr;
+vector <uint64_t> access_hist[LLC_SET];
+uint64_t reuse_dist_krn[MAX_REUSE_DIST];
+uint64_t reuse_dist_usr[MAX_REUSE_DIST];
+unordered_map <uint64_t, uint64_t> access_map;
+uint64_t curr_index[LLC_SET];
 
 // initialize replacement state
-void CACHE::llc_initialize_replacement()
+void CACHE::llc_initialize_replacement(char *tracefile)
 {
-
+    char outfilename[1024];
+    char *last_slash = strrchr(tracefile, '/')+1;
+    char * first_dot = strchr(tracefile, '.');
+    char file[1024];
+    snprintf(file, first_dot - last_slash - 5, "%s", last_slash);
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s.access", file);
+    outfile = fopen(outfilename, "wb");
+    if (!outfile) {
+        perror("Error: ");
+        assert(0);
+    }
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_krn.csv", file);
+    reuse_csv_krn = fopen(outfilename, "w");
+    if (!reuse_csv_krn) {
+        perror("Error: ");
+        assert(0);
+    }
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_usr.csv", file);
+    reuse_csv_usr = fopen(outfilename, "w");
+    if (!reuse_csv_usr) {
+        perror("Error: ");
+        assert(0);
+    }
 }
 
 // find replacement victim
@@ -36,9 +76,34 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
     if ((type == WRITEBACK) && ip)
         assert(0);
 
+    access_hist[set].push_back(full_addr/64);
+    curr_index[set]++;
+
+    uint64_t block_addr = (full_addr  >> LOG2_BLOCK_SIZE);
+    if (access_map.find(block_addr) != access_map.end()) {
+        access_hist[set][access_map[(block_addr)]] = (uint64_t)0;
+        unsigned int curr_reuse = 0;
+        for (uint64_t i = access_map[(block_addr)]; i < curr_index[set]-1; i++) {
+            if (access_hist[set].at(i) != 0)
+                curr_reuse += 1;
+        }
+        if (curr_reuse < MAX_REUSE_DIST) {
+            if (full_addr > 0xff00000000000000)
+                reuse_dist_krn[curr_reuse]++;
+            else
+                reuse_dist_usr[curr_reuse]++;
+        }
+    }
+    access_map[(block_addr)] = curr_index[set]-1;
+
     // uncomment this line to see the LLC accesses
     // cout << "CPU: " << cpu << "  LLC " << setw(9) << TYPE_NAME << " set: " << setw(5) << set << " way: " << setw(2) << way;
     // cout << hex << " paddr: " << setw(12) << paddr << " ip: " << setw(8) << ip << " victim_addr: " << victim_addr << dec << endl;
+
+    struct access curr;
+    curr.full_addr = full_addr;
+    curr.type = type;
+    fwrite(&curr, sizeof(struct access), 1, outfile);
 
     // baseline LRU
     if (hit && (type == WRITEBACK)) // writeback hit does not update LRU state
@@ -49,5 +114,12 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
 
 void CACHE::llc_replacement_final_stats()
 {
+    for(int i = 0; i < MAX_REUSE_DIST; i++) {
+        fprintf(reuse_csv_krn, "%d,%" PRIu64 "\n", i, reuse_dist_krn[i]);
+        fprintf(reuse_csv_usr, "%d,%" PRIu64 "\n", i, reuse_dist_usr[i]);
+    }
+    fclose(outfile);
+    fclose(reuse_csv_krn);
+    fclose(reuse_csv_usr);
 
 }
