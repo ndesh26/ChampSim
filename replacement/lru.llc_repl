@@ -3,6 +3,8 @@
 #include <vector>
 #include <bits/stdc++.h>
 #define MAX_REUSE_DIST 8000
+#define MAX_ACCESS_COUNT 8000
+#define MAX_MISSES_COUNT 8000
 
 struct access {
     uint64_t full_addr;
@@ -21,6 +23,24 @@ uint64_t reuse_dist_krn_llc[MAX_REUSE_DIST];
 uint64_t reuse_dist_usr_llc[MAX_REUSE_DIST];
 unordered_map <uint64_t, uint64_t> access_map_llc;
 uint64_t curr_index_llc[LLC_SET];
+#endif
+
+#ifdef ACCESS_COUNT_LLC
+FILE *access_blocks_csv_llc_krn;
+FILE *access_blocks_csv_llc_usr;
+unordered_map <uint64_t, uint64_t> access_count_llc_krn;
+unordered_map <uint64_t, uint64_t> access_count_llc_usr;
+uint64_t access_blocks_llc_krn[MAX_ACCESS_COUNT];
+uint64_t access_blocks_llc_usr[MAX_ACCESS_COUNT];
+#endif
+
+#ifdef MISSES_COUNT_LLC
+FILE *misses_blocks_csv_llc_krn;
+FILE *misses_blocks_csv_llc_usr;
+unordered_map <uint64_t, uint64_t> misses_count_llc_krn;
+unordered_map <uint64_t, uint64_t> misses_count_llc_usr;
+uint64_t misses_blocks_llc_krn[MAX_MISSES_COUNT];
+uint64_t misses_blocks_llc_usr[MAX_MISSES_COUNT];
 #endif
 
 // initialize replacement state
@@ -51,6 +71,36 @@ void CACHE::llc_initialize_replacement(char *tracefile)
     snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_usr.csv", file);
     reuse_csv_usr_llc = fopen(outfilename, "w");
     if (!reuse_csv_usr_llc) {
+        perror("Error: ");
+        assert(0);
+    }
+#endif
+
+#ifdef ACCESS_COUNT_LLC
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_access_krn.csv", file);
+    access_blocks_csv_llc_krn = fopen(outfilename, "w");
+    if (!access_blocks_csv_llc_krn) {
+        perror("Error: ");
+        assert(0);
+    }
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_access_usr.csv", file);
+    access_blocks_csv_llc_usr = fopen(outfilename, "w");
+    if (!access_blocks_csv_llc_usr) {
+        perror("Error: ");
+        assert(0);
+    }
+#endif
+
+#ifdef MISSES_COUNT_LLC
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_misses_krn.csv", file);
+    misses_blocks_csv_llc_krn = fopen(outfilename, "w");
+    if (!misses_blocks_csv_llc_krn) {
+        perror("Error: ");
+        assert(0);
+    }
+    snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/%s_misses_usr.csv", file);
+    misses_blocks_csv_llc_usr = fopen(outfilename, "w");
+    if (!misses_blocks_csv_llc_usr) {
         perror("Error: ");
         assert(0);
     }
@@ -87,26 +137,66 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
     if ((type == WRITEBACK) && ip)
         assert(0);
 
-#ifdef REUSE_LLC
     uint64_t block_addr = (full_addr  >> LOG2_BLOCK_SIZE);
-    access_hist_llc[set].push_back(block_addr);
-    curr_index_llc[set]++;
 
-    if (access_map_llc.find(block_addr) != access_map_llc.end()) {
-        access_hist_llc[set][access_map_llc[(block_addr)]] = (uint64_t)0;
-        unsigned int curr_reuse = 0;
-        for (uint64_t i = access_map_llc[(block_addr)]; i < curr_index_llc[set]-1; i++) {
-            if (access_hist_llc[set].at(i) != 0)
-                curr_reuse += 1;
+#ifdef REUSE_LLC
+    if (type != WRITEBACK) {
+        access_hist_llc[set].push_back(block_addr);
+        curr_index_llc[set]++;
+
+        if (access_map_llc.find(block_addr) != access_map_llc.end()) {
+            access_hist_llc[set][access_map_llc[(block_addr)]] = (uint64_t)0;
+            unsigned int curr_reuse = 0;
+            for (uint64_t i = access_map_llc[(block_addr)]; i < curr_index_llc[set]-1; i++) {
+                if (access_hist_llc[set].at(i) != 0)
+                    curr_reuse += 1;
+            }
+            if (curr_reuse < MAX_REUSE_DIST) {
+                if (virtual_address > 0xff00000000000000)
+                    reuse_dist_krn_llc[curr_reuse]++;
+                else
+                    reuse_dist_usr_llc[curr_reuse]++;
+            }
         }
-        if (curr_reuse < MAX_REUSE_DIST) {
-            if (virtual_address > 0xff00000000000000)
-                reuse_dist_krn_llc[curr_reuse]++;
+        access_map_llc[(block_addr)] = curr_index_llc[set]-1;
+    }
+#endif
+
+#ifdef ACCESS_COUNT_LLC
+    if (type != WRITEBACK) {
+        if (virtual_address > 0xff00000000000000) {
+            if (access_count_llc_krn.find(block_addr) != access_count_llc_krn.end()) {
+                access_count_llc_krn[block_addr] += 1;
+            }
             else
-                reuse_dist_usr_llc[curr_reuse]++;
+                access_count_llc_krn[block_addr] = 1;
+        } else {
+            if (access_count_llc_usr.find(block_addr) != access_count_llc_usr.end()) {
+                access_count_llc_usr[block_addr] += 1;
+            }
+            else
+                access_count_llc_usr[block_addr] = 1;
         }
     }
-    access_map_llc[(block_addr)] = curr_index_llc[set]-1;
+#endif
+
+#ifdef MISSES_COUNT_LLC
+    if (type != WRITEBACK && !hit) {
+        if (virtual_address > 0xff00000000000000) {
+            if (misses_count_llc_krn.find(block_addr) != misses_count_llc_krn.end()) {
+                misses_count_llc_krn[block_addr] += 1;
+            }
+            else
+                misses_count_llc_krn[block_addr] = 1;
+
+        } else {
+            if (misses_count_llc_usr.find(block_addr) != misses_count_llc_usr.end()) {
+                misses_count_llc_usr[block_addr] += 1;
+            }
+            else
+                misses_count_llc_usr[block_addr] = 1;
+        }
+    }
 #endif
 
     // uncomment this line to see the LLC accesses
@@ -129,6 +219,50 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
 
 void CACHE::llc_replacement_final_stats()
 {
+#ifdef ACCESS_COUNT_LLC
+    // kernel access count
+    for(auto it = access_count_llc_krn.begin(); it != access_count_llc_krn.end(); ++it) {
+        if (it->second < MAX_ACCESS_COUNT)
+            access_blocks_llc_krn[it->second]++;
+    }
+    for(int i = 0; i < MAX_ACCESS_COUNT; i++) {
+        fprintf(access_blocks_csv_llc_krn, "%d,%" PRIu64 "\n", i, access_blocks_llc_krn[i]);
+    }
+    fclose(access_blocks_csv_llc_krn);
+
+    // user access count
+    for(auto it = access_count_llc_usr.begin(); it != access_count_llc_usr.end(); ++it) {
+        if (it->second < MAX_ACCESS_COUNT)
+            access_blocks_llc_usr[it->second]++;
+    }
+    for(int i = 0; i < MAX_ACCESS_COUNT; i++) {
+        fprintf(access_blocks_csv_llc_usr, "%d,%" PRIu64 "\n", i, access_blocks_llc_usr[i]);
+    }
+    fclose(access_blocks_csv_llc_usr);
+#endif
+
+#ifdef MISSES_COUNT_LLC
+    // kernel misses count
+    for(auto it = misses_count_llc_krn.begin(); it != misses_count_llc_krn.end(); ++it) {
+        if (it->second < MAX_MISSES_COUNT)
+            misses_blocks_llc_krn[it->second]++;
+    }
+    for(int i = 0; i < MAX_MISSES_COUNT; i++) {
+        fprintf(misses_blocks_csv_llc_krn, "%d,%" PRIu64 "\n", i, misses_blocks_llc_krn[i]);
+    }
+    fclose(misses_blocks_csv_llc_krn);
+
+    // user misses count
+    for(auto it = misses_count_llc_usr.begin(); it != misses_count_llc_usr.end(); ++it) {
+        if (it->second < MAX_MISSES_COUNT)
+            misses_blocks_llc_usr[it->second]++;
+    }
+    for(int i = 0; i < MAX_MISSES_COUNT; i++) {
+        fprintf(misses_blocks_csv_llc_usr, "%d,%" PRIu64 "\n", i, misses_blocks_llc_usr[i]);
+    }
+    fclose(misses_blocks_csv_llc_usr);
+#endif
+
 #ifdef REUSE_LLC
     for(int i = 0; i < MAX_REUSE_DIST; i++) {
         fprintf(reuse_csv_krn_llc, "%d,%" PRIu64 "\n", i, reuse_dist_krn_llc[i]);
@@ -137,6 +271,7 @@ void CACHE::llc_replacement_final_stats()
     fclose(reuse_csv_krn_llc);
     fclose(reuse_csv_usr_llc);
 #endif
+
 #ifdef TRACE_LLC
     fclose(outfile_llc);
 #endif
