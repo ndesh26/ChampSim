@@ -186,6 +186,7 @@ class CACHE : public MEMORY {
     void add_mshr(PACKET *packet),
          update_fill_cycle(),
          llc_initialize_replacement(char *tracefile),
+         l2c_initialize_replacement(char *tracefile),
          update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit),
          llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t virtual_address, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit),
          lru_update(uint32_t set, uint32_t way),
