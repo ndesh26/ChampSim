@@ -188,7 +188,7 @@ class CACHE : public MEMORY {
          llc_initialize_replacement(char *tracefile),
          l2c_initialize_replacement(char *tracefile),
          update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit),
-         llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t virtual_address, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit),
+         llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t virtual_address, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit, uint8_t asid[]),
          lru_update(uint32_t set, uint32_t way),
          fill_cache(uint32_t set, uint32_t way, PACKET *packet),
          replacement_final_stats(),
