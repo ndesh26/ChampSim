@@ -3,8 +3,9 @@
 BRANCH=$1           # branch/*.bpred
 L1D_PREFETCHER=$2   # prefetcher/*.l1d_pref
 L2C_PREFETCHER=$3   # prefetcher/*.l2c_pref
-LLC_REPLACEMENT=$4  # replacement/*.llc_repl
-NUM_CORE=$5         # tested up to 8-core system
+L2C_REPLACEMENT=$4  # replacement/*.llc_repl
+LLC_REPLACEMENT=$5  # replacement/*.llc_repl
+NUM_CORE=$6         # tested up to 8-core system
 
 ############## Some useful macros ###############
 BOLD=$(tput bold)
@@ -41,6 +42,12 @@ if [ ! -f ./branch/${BRANCH}.bpred ] || [ ! -f ./prefetcher/${L1D_PREFETCHER}.l1
 	echo "$p"
 
 	echo
+	echo "${BOLD}Possible L2C Replacement: ${NORMAL}"
+	LIST=$(ls replacement/*.l2c_repl | cut -d '/' -f2 | cut -d '.' -f1)
+	p=$( embed_newline $LIST )
+	echo "$p"
+
+	echo
 	echo "${BOLD}Possible LLC Replacement: ${NORMAL}"
 	LIST=$(ls replacement/*.llc_repl | cut -d '/' -f2 | cut -d '.' -f1)
 	p=$( embed_newline $LIST )
@@ -64,6 +71,7 @@ echo
 cp branch/${BRANCH}.bpred branch/branch_predictor.cc
 cp prefetcher/${L1D_PREFETCHER}.l1d_pref prefetcher/l1d_prefetcher.cc
 cp prefetcher/${L2C_PREFETCHER}.l2c_pref prefetcher/l2c_prefetcher.cc
+cp replacement/${L2C_REPLACEMENT}.l2c_repl replacement/l2c_replacement.cc
 cp replacement/${LLC_REPLACEMENT}.llc_repl replacement/llc_replacement.cc
 
 # Build
@@ -84,9 +92,10 @@ echo "${BOLD}ChampSim is successfully built"
 echo "Branch Predictor: ${BRANCH}"
 echo "L1D Prefetcher: ${L1D_PREFETCHER}"
 echo "L2C Prefetcher: ${L2C_PREFETCHER}"
+echo "L2C Replacement: ${L2C_REPLACEMENT}"
 echo "LLC Replacement: ${LLC_REPLACEMENT}"
 echo "Cores: ${NUM_CORE}"
-BINARY_NAME="${BRANCH}-${L1D_PREFETCHER}-${L2C_PREFETCHER}-${LLC_REPLACEMENT}-${NUM_CORE}core"
+BINARY_NAME="${BRANCH}-${L1D_PREFETCHER}-${L2C_PREFETCHER}-${L2C_REPLACEMENT}-${LLC_REPLACEMENT}-${NUM_CORE}core"
 echo "Binary: bin/${BINARY_NAME}${NORMAL}"
 echo ""
 mv bin/champsim bin/${BINARY_NAME}
@@ -100,4 +109,5 @@ sed -i.bak 's/\<DRAM_CHANNELS_LOG2 1\>/DRAM_CHANNELS_LOG2 0/g' inc/champsim.h
 cp branch/bimodal.bpred branch/branch_predictor.cc
 cp prefetcher/no.l1d_pref prefetcher/l1d_prefetcher.cc
 cp prefetcher/no.l2c_pref prefetcher/l2c_prefetcher.cc
+cp replacement/lru.l2c_repl replacement/l2c_replacement.cc
 cp replacement/lru.llc_repl replacement/llc_replacement.cc
