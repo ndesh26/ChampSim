@@ -153,9 +153,9 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
             }
             if (curr_reuse < MAX_REUSE_DIST) {
                 if (asid[0] == 128)
-                    reuse_dist_krn_llc[curr_reuse]++;
-                else
                     reuse_dist_usr_llc[curr_reuse]++;
+                else
+                    reuse_dist_krn_llc[curr_reuse]++;
             }
         }
         access_map_llc[(block_addr)] = curr_index_llc[set]-1;
@@ -165,17 +165,17 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
 #ifdef ACCESS_COUNT_LLC
     if (type != WRITEBACK) {
         if (asid[0] == 128) {
-            if (access_count_llc_krn.find(block_addr) != access_count_llc_krn.end()) {
-                access_count_llc_krn[block_addr] += 1;
-            }
-            else
-                access_count_llc_krn[block_addr] = 1;
-        } else {
             if (access_count_llc_usr.find(block_addr) != access_count_llc_usr.end()) {
                 access_count_llc_usr[block_addr] += 1;
             }
             else
                 access_count_llc_usr[block_addr] = 1;
+        } else {
+            if (access_count_llc_krn.find(block_addr) != access_count_llc_krn.end()) {
+                access_count_llc_krn[block_addr] += 1;
+            }
+            else
+                access_count_llc_krn[block_addr] = 1;
         }
     }
 #endif
@@ -183,18 +183,18 @@ void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t wa
 #ifdef MISSES_COUNT_LLC
     if (type != WRITEBACK && !hit) {
         if (asid[0] == 128) {
-            if (misses_count_llc_krn.find(block_addr) != misses_count_llc_krn.end()) {
-                misses_count_llc_krn[block_addr] += 1;
-            }
-            else
-                misses_count_llc_krn[block_addr] = 1;
-
-        } else {
             if (misses_count_llc_usr.find(block_addr) != misses_count_llc_usr.end()) {
                 misses_count_llc_usr[block_addr] += 1;
             }
             else
                 misses_count_llc_usr[block_addr] = 1;
+
+        } else {
+            if (misses_count_llc_krn.find(block_addr) != misses_count_llc_krn.end()) {
+                misses_count_llc_krn[block_addr] += 1;
+            }
+            else
+                misses_count_llc_krn[block_addr] = 1;
         }
     }
 #endif
