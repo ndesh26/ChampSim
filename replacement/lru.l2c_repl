@@ -14,7 +14,7 @@ static struct access {
 static FILE *outfile[NUM_CPUS];
 #endif
 
-#ifdef REUSE_LLC
+#ifdef REUSE_L2C
 static FILE *reuse_csv[NUM_CPUS];
 static vector <uint64_t> access_hist[NUM_CPUS][L2C_SET];
 static uint64_t reuse_dist[NUM_CPUS][MAX_REUSE_DIST];
@@ -41,7 +41,7 @@ void CACHE::l2c_initialize_replacement(char *tracefile)
     }
 #endif
 
-#ifdef REUSE_LLC
+#ifdef REUSE_L2C
     snprintf(outfilename, 102, "/data/ndesh/UGP/cloudsuite_access/L2C/%s_reuse.csv", file);
     reuse_csv[cpu] = fopen(outfilename, "wb");
     if (!reuse_csv[cpu]) {
