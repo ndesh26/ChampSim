@@ -24,7 +24,7 @@ using namespace std;
 #include <vector>
 #include <map>
 
-uint64_t CRC( uint64_t _blockAddress )
+static uint64_t CRC( uint64_t _blockAddress )
 {
     static const unsigned long long crcPolynomial = 3988292384ULL;
     unsigned long long _returnVal = _blockAddress;
